@@ -1,17 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react';
 import './App.css';
 import World from './classes/World';
-import Animal from './classes/Animal';
+import Herbivore from './classes/Herbivore';
+import Predator from './classes/Predator';
 import Grass from './classes/Grass';
 
 function App() {
   const canvasRef = useRef(null);
   const animationRef = useRef(null);
   const [world] = useState(new World(800, 600));
-  const [animals, setAnimals] = useState([]);
+  const [herbivores, setHerbivores] = useState([]);
+  const [predators, setPredators] = useState([]);
   const [grassPatches, setGrassPatches] = useState([]);
 
-  // Функция проверки пересечения травы
+  // Проверка пересечения травы
   const isOverlapping = (newGrass, existingGrass, minDistance = 25) => {
     for (const grass of existingGrass) {
       const dx = grass.x - newGrass.x;
@@ -24,7 +26,7 @@ function App() {
     return false;
   };
 
-  // Функция создания травы без наложений
+  // Создание травы без наложений
   const createNonOverlappingGrass = (worldWidth, worldHeight, count = 35) => {
     const grassPatches = [];
     const maxAttempts = 200;
@@ -37,7 +39,7 @@ function App() {
         const potentialGrass = new Grass(
           Math.random() * worldWidth,
           Math.random() * worldHeight,
-          10 + Math.random() * 10  // радиус от 10 до 20
+          10 + Math.random() * 10
         );
         
         if (!isOverlapping(potentialGrass, grassPatches, 25)) {
@@ -47,7 +49,6 @@ function App() {
         attempts++;
       }
       
-      // Если не удалось разместить — добавляем в любом случае
       if (!placed) {
         console.warn(`Не удалось разместить траву без наложения (попытка ${i + 1})`);
         grassPatches.push(new Grass(
@@ -61,70 +62,91 @@ function App() {
     return grassPatches;
   };
 
-  // Создаём животных и траву при запуске
+  // Инициализация мира
   useEffect(() => {
-    // Создаём траву без наложений
+    // Создаём траву
     const newGrass = createNonOverlappingGrass(world.width, world.height, 35);
     world.grassPatches = newGrass;
     setGrassPatches(newGrass);
 
-    // Создаём животных (пока старый класс Animal)
-    const newAnimals = [];
-    // 3 льва (жёлтые)
-    for (let i = 0; i < 3; i++) {
-      newAnimals.push(new Animal(
-        Math.random() * world.width,
-        Math.random() * world.height,
-        '#ffd700',
-        12
-      ));
-    }
-    // 5 зебр (белые)
+    // Создаём травоядных (зебры и буйволы)
+    const newHerbivores = [];
+    
+    // 5 зебр
     for (let i = 0; i < 5; i++) {
-      newAnimals.push(new Animal(
+      newHerbivores.push(new Herbivore(
         Math.random() * world.width,
         Math.random() * world.height,
-        '#ffffff',
-        10
+        { species: 'zebra', color: '#ffffff', radius: 10, maxSpeed: 2.8, courage: 30 + Math.random() * 40 }
       ));
     }
-    // 2 буйвола (чёрные)
+    
+    // 2 буйвола
     for (let i = 0; i < 2; i++) {
-      newAnimals.push(new Animal(
+      newHerbivores.push(new Herbivore(
         Math.random() * world.width,
         Math.random() * world.height,
-        '#333333',
-        14
+        { species: 'buffalo', color: '#333333', radius: 14, maxSpeed: 2.2, courage: 60 + Math.random() * 30 }
       ));
     }
-    world.herbivores = newAnimals.filter(a => a.color !== '#ffd700');
-    world.predators = newAnimals.filter(a => a.color === '#ffd700');
-    setAnimals(newAnimals);
+    
+    world.herbivores = newHerbivores;
+    setHerbivores(newHerbivores);
+
+    // Создаём хищников (львы)
+    const newPredators = [];
+    for (let i = 0; i < 3; i++) {
+      newPredators.push(new Predator(
+        Math.random() * world.width,
+        Math.random() * world.height,
+        { species: 'lion', color: '#ffd700', radius: 12, maxSpeed: 3.0 }
+      ));
+    }
+    world.predators = newPredators;
+    setPredators(newPredators);
   }, [world]);
 
-  // Функция отрисовки
-  const draw = (ctx, width, height, grassList, animalsList) => {
-    // Очищаем поле (цвет земли)
+  // Отрисовка
+  const draw = (ctx, width, height, grassList, herbivoresList, predatorsList) => {
+    // Фон (земля)
     ctx.fillStyle = '#8B5A2B';
     ctx.fillRect(0, 0, width, height);
 
-    // Рисуем траву
+    // Трава
     grassList.forEach(grass => grass.draw(ctx));
     
-    // Рисуем всех животных
-    animalsList.forEach(animal => animal.draw(ctx));
+    // Травоядные
+    herbivoresList.forEach(herbivore => herbivore.draw(ctx));
+    
+    // Хищники
+    predatorsList.forEach(predator => predator.draw(ctx));
   };
 
-  // Анимация (обновление позиций и перерисовка)
+  // Анимация (движение животных)
   useEffect(() => {
     const updateAnimation = () => {
-      setAnimals(prevAnimals => {
-        const newAnimals = [...prevAnimals];
-        newAnimals.forEach(animal => {
-          animal.moveWithInertia(world.width, world.height, 1.5, 0.01);
+      // Обновляем травоядных
+      setHerbivores(prev => {
+        const newHerbivores = [...prev];
+        newHerbivores.forEach(herbivore => {
+          if (herbivore.isAlive) {
+            herbivore.moveWithInertia(world.width, world.height, 1.5, 0.01);
+          }
         });
-        return newAnimals;
+        return newHerbivores;
       });
+      
+      // Обновляем хищников
+      setPredators(prev => {
+        const newPredators = [...prev];
+        newPredators.forEach(predator => {
+          if (predator.isAlive) {
+            predator.moveWithInertia(world.width, world.height, 1.5, 0.01);
+          }
+        });
+        return newPredators;
+      });
+      
       animationRef.current = requestAnimationFrame(updateAnimation);
     };
 
@@ -137,18 +159,18 @@ function App() {
     };
   }, [world]);
 
-  // Отрисовка при изменении animals или grassPatches
+  // Отрисовка при изменении состояния
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
-    draw(ctx, world.width, world.height, grassPatches, animals);
-  }, [animals, grassPatches, world]);
+    draw(ctx, world.width, world.height, grassPatches, herbivores, predators);
+  }, [herbivores, predators, grassPatches, world]);
 
   return (
     <div className="App">
       <header className="App-header">
         <h1>Ecosystem Simulation</h1>
-        <p>🦁 Львы (жёлтые) | 🦓 Зебры (белые) | 🐃 Буйволы (чёрные) | 🌿 Трава (зелёные овалы)</p>
+        <p>🦁 Хищники (жёлтые) | 🦓 Травоядные (белые/чёрные) | 🌿 Трава (зелёные овалы)</p>
         <canvas 
           ref={canvasRef}
           width={world.width}
@@ -156,7 +178,7 @@ function App() {
           style={{ border: '2px solid #333', marginTop: '20px', backgroundColor: '#8B5A2B' }}
         />
         <p style={{ fontSize: '14px', marginTop: '10px' }}>
-          Животные двигаются плавно (с инерцией) | Трава не накладывается друг на друга
+          Животные двигаются плавно | Трава не накладывается
         </p>
       </header>
     </div>
