@@ -4,21 +4,40 @@ class Herbivore extends Animal {
     constructor(x, y, options = {}) {
         const defaults = {
             color: '#ffffff',
-            radius: 10,
+            radius: 12,
             species: 'zebra',
             maxSpeed: 1.0,
             searchRange: 150
         };
         
         const settings = { ...defaults, ...options };
-        super(x, y, settings.color, settings.radius, "herbivore", settings.maxSpeed);
+        super(x, y, settings.color, settings.radius, "herbivore", settings.maxSpeed, settings.gender, settings.isChild);
         
         this.species = settings.species;
         this.searchRange = settings.searchRange;
         this.currentTargetGrass = null;
     }
 
-    // Поиск ближайшей травы в радиусе видимости
+    createOffspring(partner) {
+        const gender = Math.random() < 0.5 ? "male" : "female";
+        const maxSpeed = (this.maxSpeed + partner.maxSpeed) / 2 + (Math.random() - 0.5) * 0.3;
+        
+        const mother = this.gender === "female" ? this : partner;
+        const offsetX = (Math.random() - 0.5) * 80;
+        const offsetY = (Math.random() - 0.5) * 80;
+        const x = Math.max(12, Math.min(mother.x + offsetX, mother.world?.width || 800));
+        const y = Math.max(12, Math.min(mother.y + offsetY, mother.world?.height || 600));
+        
+        return new Herbivore(x, y, {
+            species: this.species,
+            color: this.color,
+            radius: 12,
+            maxSpeed: Math.max(0.5, maxSpeed),
+            gender: gender,
+            isChild: true
+        });
+    }
+
     getNearestGrass(world, maxDistance = 240) {
         let nearest = null;
         let minDistance = Infinity;
@@ -42,7 +61,6 @@ class Herbivore extends Animal {
         return this.getNearestGrass(world, 240);
     }
 
-    // Движение к траве
     seekGrass(grass) {
         if (!grass || grass.isDepleted()) {
             this.currentTargetGrass = null;
@@ -67,20 +85,16 @@ class Herbivore extends Animal {
         return true;
     }
 
-    // Попытка поесть
     tryToEat(world) {
-        // Ест только если голоден (голод > 50)
         if (this.hunger < 50) {
             this.currentTargetGrass = null;
             return false;
         }
         
-        // Проверяем, существует ли ещё цель
         if (this.currentTargetGrass && this.currentTargetGrass.isDepleted()) {
             this.currentTargetGrass = null;
         }
         
-        // Если нет цели — ищем
         if (!this.currentTargetGrass) {
             this.currentTargetGrass = this.findFood(world);
             if (this.currentTargetGrass) {
@@ -88,21 +102,14 @@ class Herbivore extends Animal {
             }
         }
         
-        // Если цель не найдена — выходим
-        if (!this.currentTargetGrass) {
-            return false;
-        }
-        
-        // Дополнительная проверка
+        if (!this.currentTargetGrass) return false;
         if (this.currentTargetGrass.isDepleted()) {
             this.currentTargetGrass = null;
             return false;
         }
         
-        // Двигаемся к траве
         this.seekGrass(this.currentTargetGrass);
         
-        // Ещё раз проверяем
         if (!this.currentTargetGrass || this.currentTargetGrass.isDepleted()) {
             this.currentTargetGrass = null;
             return false;
@@ -112,7 +119,6 @@ class Herbivore extends Animal {
         const dy = this.currentTargetGrass.y - this.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
         
-        // Если достаточно близко — съедаем
         if (distance < this.radius + this.currentTargetGrass.radius + 10) {
             const eaten = this.currentTargetGrass.eat(25);
             if (eaten > 0) {
@@ -123,6 +129,38 @@ class Herbivore extends Animal {
             return true;
         }
         
+        return false;
+    }
+
+    tryToMate(world) {
+        if (this.hunger > 50) return false;
+        if (this.matingCooldown > 0) return false;
+        if (this.isChild) return false;
+        
+        let nearestPartner = null;
+        let minDistance = Infinity;
+        
+        for (const other of world.herbivores) {
+            if (other === this) continue;
+            if (!other.isAlive) continue;
+            if (this.gender === other.gender) continue;
+            if (other.matingCooldown > 0) continue;
+            if (other.isChild) continue;
+            if (this.species !== other.species) continue;  // ✅ только одинаковые виды
+            
+            const dx = this.x - other.x;
+            const dy = this.y - other.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance < minDistance && distance < 40) {
+                minDistance = distance;
+                nearestPartner = other;
+            }
+        }
+        
+        if (nearestPartner) {
+            return this.mateWith(nearestPartner, world);
+        }
         return false;
     }
 }

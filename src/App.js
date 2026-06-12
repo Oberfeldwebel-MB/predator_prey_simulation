@@ -76,7 +76,7 @@ function App() {
       newHerbivores.push(new Herbivore(
         Math.random() * world.width,
         Math.random() * world.height,
-        { species: 'zebra', color: '#ffffff', radius: 10, maxSpeed: 1.0 }
+        { species: 'zebra', color: '#ffffff', radius: 12, maxSpeed: 1.0 }
       ));
     }
     
@@ -85,15 +85,16 @@ function App() {
       newHerbivores.push(new Herbivore(
         Math.random() * world.width,
         Math.random() * world.height,
-        { species: 'buffalo', color: '#333333', radius: 14, maxSpeed: 0.8 }
+        { species: 'buffalo', color: '#333333', radius: 12, maxSpeed: 0.8 }
       ));
     }
     
     world.herbivores = newHerbivores;
     setHerbivores(newHerbivores);
 
+    // Создаём хищников (львы) - 6 особей для стабильности
     const newPredators = [];
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 6; i++) {
       newPredators.push(new Predator(
         Math.random() * world.width,
         Math.random() * world.height,
@@ -169,7 +170,6 @@ function App() {
 
     grassList.forEach(grass => grass.draw(ctx));
     
-    // Рисуем всех животных
     const allAnimals = [...herbivoresList, ...predatorsList];
     allAnimals.forEach(animal => {
       if (selectedAnimal === animal) {
@@ -245,7 +245,6 @@ function App() {
   const alivePredators = predators.filter(p => p.isAlive).length;
   const aliveGrass = grassPatches.filter(g => !g.isDepleted()).length;
 
-  // Полный список животных
   const allAnimals = [...herbivores, ...predators].filter(a => a.isAlive);
 
   const getAnimalStatus = (animal) => {
@@ -254,12 +253,12 @@ function App() {
     
     if (animal.type === "predator") {
       if (animal.currentTarget && animal.currentTarget.isAlive) return "🦁 Преследует добычу";
-      if (animal.huntingCooldown > 0) return "😴 Отдыхает";
-      if (animal.hunger > 60) return "🍽️ Голоден";
+      if (animal.huntingCooldown > 0) return "😴 Отдыхает после охоты";
+      if (animal.hunger > 60) return "🍽️ Голоден, ищет добычу";
       return "🚶 Бродит";
     } else {
       if (animal.currentTargetGrass && !animal.currentTargetGrass.isDepleted()) return "🌿 Идёт к траве";
-      if (animal.hunger > 50) return "🍽️ Голоден";
+      if (animal.hunger > 50) return "🍽️ Голоден, ищет траву";
       return "🌾 Пасётся";
     }
   };
@@ -319,6 +318,7 @@ function App() {
                   <span>
                     {animal.type === "predator" ? "🦁" : animal.species === 'zebra' ? "🦓" : "🐃"}
                     {' '}{animal.species || animal.constructor.name}
+                    {' '}{animal.gender === "male" ? "♂" : "♀"}
                   </span>
                   <span style={{ fontSize: '10px', color: '#aaa' }}>
                     🍽️ {Math.round(animal.hunger)}%
@@ -338,6 +338,7 @@ function App() {
                 <div style={{ fontSize: '12px' }}>
                   <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>
                     {selectedAnimal.species || selectedAnimal.constructor.name}
+                    {' '}{selectedAnimal.gender === "male" ? "♂" : "♀"}
                   </div>
                   <div>🍽️ Голод: {Math.round(selectedAnimal.hunger)}%</div>
                   <div>⚡ Выносливость: {Math.round(selectedAnimal.stamina)}%</div>
@@ -345,6 +346,7 @@ function App() {
                   {selectedAnimal.type === "herbivore" && (
                     <div>🛡️ Смелость: {Math.round(selectedAnimal.courage)}%</div>
                   )}
+                  <div>⏳ Кулдаун: {selectedAnimal.matingCooldown > 0 ? selectedAnimal.matingCooldown + " кадров" : "Готов к размножению"}</div>
                 </div>
               </>
             )}
