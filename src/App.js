@@ -12,6 +12,8 @@ function App() {
   const [herbivores, setHerbivores] = useState([]);
   const [predators, setPredators] = useState([]);
   const [grassPatches, setGrassPatches] = useState([]);
+  const [selectedAnimal, setSelectedAnimal] = useState(null);
+  const [cursorStyle, setCursorStyle] = useState('default');
 
   // Проверка пересечения травы
   const isOverlapping = (newGrass, existingGrass, minDistance = 25) => {
@@ -50,7 +52,6 @@ function App() {
       }
       
       if (!placed) {
-        console.warn(`Не удалось разместить траву без наложения (попытка ${i + 1})`);
         grassPatches.push(new Grass(
           Math.random() * worldWidth,
           Math.random() * worldHeight,
@@ -64,12 +65,10 @@ function App() {
 
   // Инициализация мира
   useEffect(() => {
-    // Создаём траву
     const newGrass = createNonOverlappingGrass(world.width, world.height, 35);
     world.grassPatches = newGrass;
     setGrassPatches(newGrass);
 
-    // Создаём травоядных (зебры и буйволы)
     const newHerbivores = [];
     
     // 5 зебр
@@ -77,7 +76,7 @@ function App() {
       newHerbivores.push(new Herbivore(
         Math.random() * world.width,
         Math.random() * world.height,
-        { species: 'zebra', color: '#ffffff', radius: 10, maxSpeed: 2.8, courage: 30 + Math.random() * 40 }
+        { species: 'zebra', color: '#ffffff', radius: 10, maxSpeed: 1.0 }
       ));
     }
     
@@ -86,62 +85,136 @@ function App() {
       newHerbivores.push(new Herbivore(
         Math.random() * world.width,
         Math.random() * world.height,
-        { species: 'buffalo', color: '#333333', radius: 14, maxSpeed: 2.2, courage: 60 + Math.random() * 30 }
+        { species: 'buffalo', color: '#333333', radius: 14, maxSpeed: 0.8 }
       ));
     }
     
     world.herbivores = newHerbivores;
     setHerbivores(newHerbivores);
 
-    // Создаём хищников (львы)
     const newPredators = [];
     for (let i = 0; i < 3; i++) {
       newPredators.push(new Predator(
         Math.random() * world.width,
         Math.random() * world.height,
-        { species: 'lion', color: '#ffd700', radius: 12, maxSpeed: 3.0 }
+        { species: 'lion', color: '#ffd700', radius: 12, maxSpeed: 1.2 }
       ));
     }
     world.predators = newPredators;
     setPredators(newPredators);
   }, [world]);
 
-  // Отрисовка
+  // Обработчик движения мыши для изменения курсора
+  const handleMouseMove = (e) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    let mouseX = (e.clientX - rect.left) * scaleX;
+    let mouseY = (e.clientY - rect.top) * scaleY;
+    
+    mouseX = Math.min(canvas.width, Math.max(0, mouseX));
+    mouseY = Math.min(canvas.height, Math.max(0, mouseY));
+    
+    const allAnimals = [...herbivores, ...predators];
+    const isOverAnimal = allAnimals.some(animal => {
+      if (!animal.isAlive) return false;
+      const dx = animal.x - mouseX;
+      const dy = animal.y - mouseY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      return distance <= animal.radius + 5;
+    });
+    
+    setCursorStyle(isOverAnimal ? 'pointer' : 'default');
+  };
+
+  // Обработчик клика на canvas
+  const handleCanvasClick = (e) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    let mouseX = (e.clientX - rect.left) * scaleX;
+    let mouseY = (e.clientY - rect.top) * scaleY;
+    
+    mouseX = Math.min(canvas.width, Math.max(0, mouseX));
+    mouseY = Math.min(canvas.height, Math.max(0, mouseY));
+    
+    const allAnimals = [...herbivores, ...predators];
+    const clickedAnimal = allAnimals.find(animal => {
+      if (!animal.isAlive) return false;
+      const dx = animal.x - mouseX;
+      const dy = animal.y - mouseY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      return distance <= animal.radius + 5;
+    });
+    
+    if (clickedAnimal) {
+      setSelectedAnimal(clickedAnimal);
+    } else {
+      setSelectedAnimal(null);
+    }
+  };
+
+  // Отрисовка с подсветкой выбранного животного
   const draw = (ctx, width, height, grassList, herbivoresList, predatorsList) => {
-    // Фон (земля)
     ctx.fillStyle = '#8B5A2B';
     ctx.fillRect(0, 0, width, height);
 
-    // Трава
     grassList.forEach(grass => grass.draw(ctx));
     
-    // Травоядные
-    herbivoresList.forEach(herbivore => herbivore.draw(ctx));
-    
-    // Хищники
-    predatorsList.forEach(predator => predator.draw(ctx));
+    // Рисуем всех животных
+    const allAnimals = [...herbivoresList, ...predatorsList];
+    allAnimals.forEach(animal => {
+      if (selectedAnimal === animal) {
+        ctx.save();
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = 'yellow';
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+      }
+      animal.draw(ctx);
+      if (selectedAnimal === animal) {
+        ctx.restore();
+        ctx.beginPath();
+        ctx.arc(animal.x, animal.y, animal.radius + 3, 0, Math.PI * 2);
+        ctx.strokeStyle = 'yellow';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    });
   };
 
-  // Анимация (движение животных)
+  // Анимация
   useEffect(() => {
     const updateAnimation = () => {
-      // Обновляем травоядных
+      world.update();
+      
+      setGrassPatches([...world.grassPatches]);
+      setHerbivores([...world.herbivores]);
+      setPredators([...world.predators]);
+      
       setHerbivores(prev => {
         const newHerbivores = [...prev];
         newHerbivores.forEach(herbivore => {
           if (herbivore.isAlive) {
-            herbivore.moveWithInertia(world.width, world.height, 1.5, 0.01);
+            herbivore.moveWithInertia(world.width, world.height);
           }
         });
         return newHerbivores;
       });
       
-      // Обновляем хищников
       setPredators(prev => {
         const newPredators = [...prev];
         newPredators.forEach(predator => {
           if (predator.isAlive) {
-            predator.moveWithInertia(world.width, world.height, 1.5, 0.01);
+            predator.moveWithInertia(world.width, world.height);
           }
         });
         return newPredators;
@@ -162,24 +235,135 @@ function App() {
   // Отрисовка при изменении состояния
   useEffect(() => {
     const canvas = canvasRef.current;
+    if (!canvas) return;
     const ctx = canvas.getContext('2d');
     draw(ctx, world.width, world.height, grassPatches, herbivores, predators);
-  }, [herbivores, predators, grassPatches, world]);
+  }, [herbivores, predators, grassPatches, world, selectedAnimal]);
+
+  // Статистика
+  const aliveHerbivores = herbivores.filter(h => h.isAlive).length;
+  const alivePredators = predators.filter(p => p.isAlive).length;
+  const aliveGrass = grassPatches.filter(g => !g.isDepleted()).length;
+
+  // Полный список животных
+  const allAnimals = [...herbivores, ...predators].filter(a => a.isAlive);
+
+  const getAnimalStatus = (animal) => {
+    if (!animal) return "";
+    if (!animal.isAlive) return "💀 Мёртв";
+    
+    if (animal.type === "predator") {
+      if (animal.currentTarget && animal.currentTarget.isAlive) return "🦁 Преследует добычу";
+      if (animal.huntingCooldown > 0) return "😴 Отдыхает";
+      if (animal.hunger > 60) return "🍽️ Голоден";
+      return "🚶 Бродит";
+    } else {
+      if (animal.currentTargetGrass && !animal.currentTargetGrass.isDepleted()) return "🌿 Идёт к траве";
+      if (animal.hunger > 50) return "🍽️ Голоден";
+      return "🌾 Пасётся";
+    }
+  };
 
   return (
     <div className="App">
       <header className="App-header">
         <h1>Ecosystem Simulation</h1>
-        <p>🦁 Хищники (жёлтые) | 🦓 Травоядные (белые/чёрные) | 🌿 Трава (зелёные овалы)</p>
-        <canvas 
-          ref={canvasRef}
-          width={world.width}
-          height={world.height}
-          style={{ border: '2px solid #333', marginTop: '20px', backgroundColor: '#8B5A2B' }}
-        />
-        <p style={{ fontSize: '14px', marginTop: '10px' }}>
-          Животные двигаются плавно | Трава не накладывается
-        </p>
+        <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
+          {/* Левая панель */}
+          <div style={{
+            backgroundColor: '#2a2a2a',
+            padding: '12px',
+            borderRadius: '8px',
+            minWidth: '220px',
+            textAlign: 'left',
+            color: '#fff',
+            fontSize: '13px',
+            maxHeight: '600px',
+            overflowY: 'auto'
+          }}>
+            <div style={{ marginBottom: '12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <span>🦁 Львы:</span>
+                <span style={{ fontWeight: 'bold' }}>{alivePredators}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <span>🦓 Зебры + 🐃 Буйволы:</span>
+                <span style={{ fontWeight: 'bold' }}>{aliveHerbivores}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>🌿 Трава:</span>
+                <span style={{ fontWeight: 'bold' }}>{aliveGrass}</span>
+              </div>
+            </div>
+            
+            <hr style={{ margin: '10px 0' }} />
+            
+            <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>📋 Список животных:</div>
+            <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+              {allAnimals.map((animal, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => setSelectedAnimal(animal)}
+                  style={{
+                    padding: '6px 8px',
+                    marginBottom: '4px',
+                    backgroundColor: selectedAnimal === animal ? '#3a6ea5' : '#3a3a3a',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    transition: 'background-color 0.2s'
+                  }}
+                >
+                  <span>
+                    {animal.type === "predator" ? "🦁" : animal.species === 'zebra' ? "🦓" : "🐃"}
+                    {' '}{animal.species || animal.constructor.name}
+                  </span>
+                  <span style={{ fontSize: '10px', color: '#aaa' }}>
+                    🍽️ {Math.round(animal.hunger)}%
+                  </span>
+                </div>
+              ))}
+              {allAnimals.length === 0 && (
+                <div style={{ textAlign: 'center', color: '#aaa', padding: '20px' }}>
+                  Все животные погибли
+                </div>
+              )}
+            </div>
+            
+            {selectedAnimal && selectedAnimal.isAlive && (
+              <>
+                <hr style={{ margin: '10px 0' }} />
+                <div style={{ fontSize: '12px' }}>
+                  <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>
+                    {selectedAnimal.species || selectedAnimal.constructor.name}
+                  </div>
+                  <div>🍽️ Голод: {Math.round(selectedAnimal.hunger)}%</div>
+                  <div>⚡ Выносливость: {Math.round(selectedAnimal.stamina)}%</div>
+                  <div>{getAnimalStatus(selectedAnimal)}</div>
+                  {selectedAnimal.type === "herbivore" && (
+                    <div>🛡️ Смелость: {Math.round(selectedAnimal.courage)}%</div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+          
+          <canvas 
+            ref={canvasRef}
+            width={world.width}
+            height={world.height}
+            onClick={handleCanvasClick}
+            onMouseMove={handleMouseMove}
+            style={{ 
+              border: '2px solid #333', 
+              marginTop: '20px', 
+              backgroundColor: '#8B5A2B',
+              cursor: cursorStyle
+            }}
+          />
+        </div>
       </header>
     </div>
   );

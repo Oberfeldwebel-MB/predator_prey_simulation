@@ -7,33 +7,44 @@ class World {
         this.predators = [];
     }
 
-    getAllAnimals() {
-        return [...this.herbivores, ...this.predators];
+    // Добавить участок травы
+    addGrass(grass) {
+        this.grassPatches.push(grass);
     }
 
-    getNearestGrass(animal, maxDistance = 50) {
-        let nearest = null;
-        let minDistance = Infinity;
-        
-        for (const grass of this.grassPatches) {
-            if (grass.isDepleted) continue;
-            
-            const dx = grass.x - animal.x;
-            const dy = grass.y - animal.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            
-            if (distance < minDistance && distance < maxDistance) {
-                minDistance = distance;
-                nearest = grass;
+    // Добавить травоядное
+    addHerbivore(herbivore) {
+        this.herbivores.push(herbivore);
+    }
+
+    // Добавить хищника
+    addPredator(predator) {
+        this.predators.push(predator);
+    }
+
+    // Обновление мира (один шаг симуляции)
+    update() {
+        // Травоядные едят траву
+        for (const herbivore of this.herbivores) {
+            if (herbivore.isAlive) {
+                herbivore.tryToEat(this);
             }
         }
-        return nearest;
+        
+        // Хищники охотятся
+        for (const predator of this.predators) {
+            if (predator.isAlive) {
+                predator.tryToHunt(this);
+            }
+        }
+        
+        // Удаляем съеденную траву и мёртвых животных
+        this.grassPatches = this.grassPatches.filter(grass => !grass.isDepleted());
+        this.herbivores = this.herbivores.filter(herbivore => herbivore.isAlive);
+        this.predators = this.predators.filter(predator => predator.isAlive);
     }
 
-    update() {
-        // Логика будет добавлена позже
-    }
-
+    // Очистить мир
     clear() {
         this.grassPatches = [];
         this.herbivores = [];
