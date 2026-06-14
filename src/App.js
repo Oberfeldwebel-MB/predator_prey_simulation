@@ -14,6 +14,16 @@ function App() {
   const [grassPatches, setGrassPatches] = useState([]);
   const [selectedAnimal, setSelectedAnimal] = useState(null);
   const [cursorStyle, setCursorStyle] = useState('default');
+  
+  // Состояния для панели управления
+  const [zebraCount, setZebraCount] = useState(10);
+  const [zebraSpeed, setZebraSpeed] = useState(1.0);
+  const [lionCount, setLionCount] = useState(6);
+  const [lionSpeed, setLionSpeed] = useState(1.2);
+  const [grassCount, setGrassCount] = useState(35);
+  const [isRunning, setIsRunning] = useState(true);
+  const [isPaused, setIsPaused] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // Проверка пересечения травы
   const isOverlapping = (newGrass, existingGrass, minDistance = 25) => {
@@ -29,7 +39,7 @@ function App() {
   };
 
   // Создание травы без наложений
-  const createNonOverlappingGrass = (worldWidth, worldHeight, count = 35) => {
+  const createNonOverlappingGrass = (worldWidth, worldHeight, count) => {
     const grassPatches = [];
     const maxAttempts = 200;
     
@@ -63,47 +73,70 @@ function App() {
     return grassPatches;
   };
 
-  // Инициализация мира
-  useEffect(() => {
-    const newGrass = createNonOverlappingGrass(world.width, world.height, 35);
+  // Функция для расчета полов (50/50)
+  const calculateGenders = (count) => {
+    const males = Math.ceil(count / 2);
+    const females = Math.floor(count / 2);
+    return { males, females };
+  };
+
+  // Функция инициализации мира с заданными параметрами
+  const initializeWorld = () => {
+    // Создаём траву
+    const newGrass = createNonOverlappingGrass(world.width, world.height, grassCount);
     world.grassPatches = newGrass;
     setGrassPatches(newGrass);
 
     const newHerbivores = [];
+    const { males: zebraMales, females: zebraFemales } = calculateGenders(zebraCount);
     
-    // 5 зебр
-    for (let i = 0; i < 5; i++) {
+    // Зебры (только зебры)
+    for (let i = 0; i < zebraMales; i++) {
       newHerbivores.push(new Herbivore(
         Math.random() * world.width,
         Math.random() * world.height,
-        { species: 'zebra', color: '#ffffff', radius: 12, maxSpeed: 1.0 }
+        { species: 'zebra', color: '#ffffff', radius: 12, maxSpeed: zebraSpeed, gender: 'male' }
       ));
     }
-    
-    // 2 буйвола
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < zebraFemales; i++) {
       newHerbivores.push(new Herbivore(
         Math.random() * world.width,
         Math.random() * world.height,
-        { species: 'buffalo', color: '#333333', radius: 12, maxSpeed: 0.8 }
+        { species: 'zebra', color: '#ffffff', radius: 12, maxSpeed: zebraSpeed, gender: 'female' }
       ));
     }
     
     world.herbivores = newHerbivores;
     setHerbivores(newHerbivores);
 
-    // Создаём хищников (львы) - 6 особей для стабильности
+    // Создаём хищников (львы)
     const newPredators = [];
-    for (let i = 0; i < 6; i++) {
+    const { males: lionMales, females: lionFemales } = calculateGenders(lionCount);
+    
+    for (let i = 0; i < lionMales; i++) {
       newPredators.push(new Predator(
         Math.random() * world.width,
         Math.random() * world.height,
-        { species: 'lion', color: '#ffd700', radius: 12, maxSpeed: 1.2 }
+        { species: 'lion', color: '#ffd700', radius: 12, maxSpeed: lionSpeed, gender: 'male' }
+      ));
+    }
+    for (let i = 0; i < lionFemales; i++) {
+      newPredators.push(new Predator(
+        Math.random() * world.width,
+        Math.random() * world.height,
+        { species: 'lion', color: '#ffd700', radius: 12, maxSpeed: lionSpeed, gender: 'female' }
       ));
     }
     world.predators = newPredators;
     setPredators(newPredators);
-  }, [world]);
+    
+    setIsInitialized(true);
+  };
+
+  // Инициализация мира при монтировании
+  useEffect(() => {
+    initializeWorld();
+  }, []);
 
   // Обработчик движения мыши для изменения курсора
   const handleMouseMove = (e) => {
@@ -193,7 +226,14 @@ function App() {
 
   // Анимация
   useEffect(() => {
+    if (!isInitialized) return;
+    
     const updateAnimation = () => {
+      if (!isRunning || isPaused) {
+        animationRef.current = requestAnimationFrame(updateAnimation);
+        return;
+      }
+      
       world.update();
       
       setGrassPatches([...world.grassPatches]);
@@ -230,15 +270,16 @@ function App() {
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [world]);
+  }, [world, isRunning, isPaused, isInitialized]);
 
   // Отрисовка при изменении состояния
   useEffect(() => {
+    if (!isInitialized) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     draw(ctx, world.width, world.height, grassPatches, herbivores, predators);
-  }, [herbivores, predators, grassPatches, world, selectedAnimal]);
+  }, [herbivores, predators, grassPatches, world, selectedAnimal, isInitialized]);
 
   // Статистика
   const aliveHerbivores = herbivores.filter(h => h.isAlive).length;
@@ -249,7 +290,7 @@ function App() {
 
   const getAnimalStatus = (animal) => {
     if (!animal) return "";
-    if (!animal.isAlive) return "💀 Мёртв";
+    if (!animal.isAlive) return "💀 Мертв";
     
     if (animal.type === "predator") {
       if (animal.currentTarget && animal.currentTarget.isAlive) return "🦁 Преследует добычу";
@@ -257,18 +298,51 @@ function App() {
       if (animal.hunger > 60) return "🍽️ Голоден, ищет добычу";
       return "🚶 Бродит";
     } else {
-      if (animal.currentTargetGrass && !animal.currentTargetGrass.isDepleted()) return "🌿 Идёт к траве";
+      if (animal.currentTargetGrass && !animal.currentTargetGrass.isDepleted()) return "🌿 Идет к траве";
       if (animal.hunger > 50) return "🍽️ Голоден, ищет траву";
       return "🌾 Пасётся";
     }
+  };
+
+  // Обработчики кнопок
+  const handleStart = () => {
+    console.log("Старт");
+    setIsRunning(true);
+    setIsPaused(false);
+  };
+
+  const handlePause = () => {
+    console.log("Пауза");
+    setIsPaused(!isPaused);
+  };
+
+  const handleReset = () => {
+    console.log("Сброс");
+    setIsRunning(false);
+    setIsPaused(false);
+    initializeWorld();
+    setIsRunning(true);
+  };
+
+  const handleApplySettings = () => {
+    console.log("Применить настройки");
+    if (lionSpeed <= zebraSpeed) {
+      alert("Львы должны быть быстрее зебр!");
+      return;
+    }
+    setIsRunning(false);
+    setIsPaused(false);
+    initializeWorld();
+    setIsRunning(true);
   };
 
   return (
     <div className="App">
       <header className="App-header">
         <h1>Ecosystem Simulation</h1>
-        <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
-          {/* Левая панель */}
+        <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start', justifyContent: 'center' }}>
+          
+          {/* ЛЕВАЯ КОЛОНКА — Статистика и список животных */}
           <div style={{
             backgroundColor: '#2a2a2a',
             padding: '12px',
@@ -286,7 +360,7 @@ function App() {
                 <span style={{ fontWeight: 'bold' }}>{alivePredators}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <span>🦓 Зебры + 🐃 Буйволы:</span>
+                <span>🦓 Зебры:</span>
                 <span style={{ fontWeight: 'bold' }}>{aliveHerbivores}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -316,7 +390,7 @@ function App() {
                   }}
                 >
                   <span>
-                    {animal.type === "predator" ? "🦁" : animal.species === 'zebra' ? "🦓" : "🐃"}
+                    {animal.type === "predator" ? "🦁" : "🦓"}
                     {' '}{animal.species || animal.constructor.name}
                     {' '}{animal.gender === "male" ? "♂" : "♀"}
                   </span>
@@ -343,15 +417,13 @@ function App() {
                   <div>🍽️ Голод: {Math.round(selectedAnimal.hunger)}%</div>
                   <div>⚡ Выносливость: {Math.round(selectedAnimal.stamina)}%</div>
                   <div>{getAnimalStatus(selectedAnimal)}</div>
-                  {selectedAnimal.type === "herbivore" && (
-                    <div>🛡️ Смелость: {Math.round(selectedAnimal.courage)}%</div>
-                  )}
                   <div>⏳ Кулдаун: {selectedAnimal.matingCooldown > 0 ? selectedAnimal.matingCooldown + " кадров" : "Готов к размножению"}</div>
                 </div>
               </>
             )}
           </div>
           
+          {/* ЦЕНТРАЛЬНАЯ КОЛОНКА — Canvas поле */}
           <canvas 
             ref={canvasRef}
             width={world.width}
@@ -365,6 +437,129 @@ function App() {
               cursor: cursorStyle
             }}
           />
+          
+          {/* ПРАВАЯ КОЛОНКА — Панель управления */}
+          <div style={{
+            backgroundColor: '#2a2a2a',
+            padding: '12px',
+            borderRadius: '8px',
+            width: '240px',
+            textAlign: 'left',
+            color: '#fff',
+            fontSize: '13px',
+            maxHeight: '600px',
+            overflowY: 'auto'
+          }}>
+            <h3 style={{ margin: '0 0 10px 0', textAlign: 'center' }}>⚙️ Управление</h3>
+            
+            <div style={{ marginBottom: '15px' }}>
+              <button 
+                onClick={handleStart}
+                style={{ width: '100%', padding: '8px', marginBottom: '8px', cursor: 'pointer', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px' }}
+              >
+                ▶ СТАРТ
+              </button>
+              <button 
+                onClick={handlePause}
+                style={{ width: '100%', padding: '8px', marginBottom: '8px', cursor: 'pointer', backgroundColor: '#FF9800', color: 'white', border: 'none', borderRadius: '4px' }}
+              >
+                {isPaused ? "▶ ПРОДОЛЖИТЬ" : "⏸ ПАУЗА"}
+              </button>
+              <button 
+                onClick={handleReset}
+                style={{ width: '100%', padding: '8px', marginBottom: '8px', cursor: 'pointer', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '4px' }}
+              >
+                🔄 СБРОС
+              </button>
+              <button 
+                onClick={handleApplySettings}
+                style={{ width: '100%', padding: '8px', cursor: 'pointer', backgroundColor: '#2196F3', color: 'white', border: 'none', borderRadius: '4px' }}
+              >
+                ✔ ПРИМЕНИТЬ
+              </button>
+            </div>
+            
+            <hr style={{ margin: '10px 0' }} />
+            
+            <div style={{ fontWeight: 'bold', marginBottom: '8px', textAlign: 'center' }}>🐆 Настройки</div>
+            
+            {/* Количество зебр */}
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span>🦓 Зебры:</span>
+                <input 
+                  type="number" 
+                  min="0" 
+                  max="50" 
+                  step="1"
+                  value={zebraCount}
+                  onChange={(e) => setZebraCount(Math.min(50, Math.max(0, parseInt(e.target.value) || 0)))}
+                  style={{ width: '60px', textAlign: 'center' }}
+                />
+              </label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                <span style={{ fontSize: '11px' }}>Скорость:</span>
+                <input 
+                  type="number" 
+                  min="0.5" 
+                  max="2.0" 
+                  step="0.1"
+                  value={zebraSpeed}
+                  onChange={(e) => setZebraSpeed(parseFloat(e.target.value))}
+                  style={{ width: '60px', textAlign: 'center' }}
+                />
+              </div>
+            </div>
+            
+            {/* Количество львов */}
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span>🦁 Львы:</span>
+                <input 
+                  type="number" 
+                  min="0" 
+                  max="30" 
+                  step="1"
+                  value={lionCount}
+                  onChange={(e) => setLionCount(Math.min(30, Math.max(0, parseInt(e.target.value) || 0)))}
+                  style={{ width: '60px', textAlign: 'center' }}
+                />
+              </label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                <span style={{ fontSize: '11px' }}>Скорость:</span>
+                <input 
+                  type="number" 
+                  min="0.5" 
+                  max="2.0" 
+                  step="0.1"
+                  value={lionSpeed}
+                  onChange={(e) => setLionSpeed(parseFloat(e.target.value))}
+                  style={{ width: '60px', textAlign: 'center' }}
+                />
+              </div>
+              {lionSpeed <= zebraSpeed && (
+                <div style={{ color: 'red', fontSize: '10px', marginTop: '4px' }}>
+                  ⚠️ Львы должны быть быстрее зебр!
+                </div>
+              )}
+            </div>
+            
+            {/* Количество травы */}
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span>🌿 Трава:</span>
+                <input 
+                  type="number" 
+                  min="0" 
+                  max="80" 
+                  step="1"
+                  value={grassCount}
+                  onChange={(e) => setGrassCount(Math.min(80, Math.max(0, parseInt(e.target.value) || 0)))}
+                  style={{ width: '60px', textAlign: 'center' }}
+                />
+              </label>
+            </div>
+          </div>
         </div>
       </header>
     </div>
