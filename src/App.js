@@ -4,9 +4,13 @@ import World from './classes/World';
 import Herbivore from './classes/Herbivore';
 import Predator from './classes/Predator';
 import Grass from './classes/Grass';
+import PopulationChart from './classes/PopulationChart';
 
 function App() {
   const canvasRef = useRef(null);
+  const chartCanvasRef = useRef(null);
+  const chartContainerRef = useRef(null);
+  const chartRef = useRef(null);
   const animationRef = useRef(null);
   const [world] = useState(new World(800, 600));
   const [herbivores, setHerbivores] = useState([]);
@@ -24,6 +28,44 @@ function App() {
   const [isRunning, setIsRunning] = useState(true);
   const [isPaused, setIsPaused] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  
+  // История для графиков (храним всё)
+  const [populationHistory, setPopulationHistory] = useState({
+    zebras: [],
+    lions: [],
+    grass: []
+  });
+  const [recordCounter, setRecordCounter] = useState(0);
+  const RECORD_INTERVAL = 30; // запись раз в 30 кадров (~0.5 сек)
+
+  // Инициализация графика
+  useEffect(() => {
+    if (chartCanvasRef.current && chartContainerRef.current && !chartRef.current) {
+      chartRef.current = new PopulationChart(
+        chartCanvasRef.current, 
+        chartContainerRef, 
+        2,    // 2 пикселя на точку
+        120   // высота
+      );
+    }
+  }, []);
+
+  // Отрисовка графика при изменении истории
+  useEffect(() => {
+    if (chartRef.current && populationHistory.zebras.length > 0) {
+      chartRef.current.draw(
+        populationHistory.zebras,
+        populationHistory.lions,
+        populationHistory.grass
+      );
+      // Автоскролл в конец
+      setTimeout(() => {
+        if (chartRef.current) {
+          chartRef.current.scrollToEnd();
+        }
+      }, 10);
+    }
+  }, [populationHistory]);
 
   // Проверка пересечения травы
   const isOverlapping = (newGrass, existingGrass, minDistance = 25) => {
@@ -80,8 +122,20 @@ function App() {
     return { males, females };
   };
 
+  // Функция очистки истории
+  const clearHistory = () => {
+    setPopulationHistory({ zebras: [], lions: [], grass: [] });
+    setRecordCounter(0);
+    if (chartRef.current) {
+      chartRef.current.clear();
+    }
+  };
+
   // Функция инициализации мира с заданными параметрами
   const initializeWorld = () => {
+    // Очищаем историю
+    clearHistory();
+    
     // Создаём траву
     const newGrass = createNonOverlappingGrass(world.width, world.height, grassCount);
     world.grassPatches = newGrass;
@@ -90,7 +144,7 @@ function App() {
     const newHerbivores = [];
     const { males: zebraMales, females: zebraFemales } = calculateGenders(zebraCount);
     
-    // Зебры (только зебры)
+    // Зебры
     for (let i = 0; i < zebraMales; i++) {
       newHerbivores.push(new Herbivore(
         Math.random() * world.width,
@@ -109,7 +163,7 @@ function App() {
     world.herbivores = newHerbivores;
     setHerbivores(newHerbivores);
 
-    // Создаём хищников (львы)
+    // Создаём львов
     const newPredators = [];
     const { males: lionMales, females: lionFemales } = calculateGenders(lionCount);
     
@@ -236,28 +290,50 @@ function App() {
       
       world.update();
       
-      setGrassPatches([...world.grassPatches]);
-      setHerbivores([...world.herbivores]);
-      setPredators([...world.predators]);
+      const newGrass = [...world.grassPatches];
+      const newHerbivores = [...world.herbivores];
+      const newPredators = [...world.predators];
       
+      setGrassPatches(newGrass);
+      setHerbivores(newHerbivores);
+      setPredators(newPredators);
+      
+      // Запись данных для графиков
+      setRecordCounter(prev => {
+        if (prev >= RECORD_INTERVAL) {
+          const aliveZebras = newHerbivores.filter(h => h.isAlive).length;
+          const aliveLions = newPredators.filter(p => p.isAlive).length;
+          const aliveGrassCount = newGrass.filter(g => !g.isDepleted()).length;
+          
+          setPopulationHistory(prevHistory => ({
+            zebras: [...prevHistory.zebras, aliveZebras],
+            lions: [...prevHistory.lions, aliveLions],
+            grass: [...prevHistory.grass, aliveGrassCount]
+          }));
+          return 0;
+        }
+        return prev + 1;
+      });
+      
+      // Обновляем позиции животных
       setHerbivores(prev => {
-        const newHerbivores = [...prev];
-        newHerbivores.forEach(herbivore => {
+        const newHerbivoresList = [...prev];
+        newHerbivoresList.forEach(herbivore => {
           if (herbivore.isAlive) {
             herbivore.moveWithInertia(world.width, world.height);
           }
         });
-        return newHerbivores;
+        return newHerbivoresList;
       });
       
       setPredators(prev => {
-        const newPredators = [...prev];
-        newPredators.forEach(predator => {
+        const newPredatorsList = [...prev];
+        newPredatorsList.forEach(predator => {
           if (predator.isAlive) {
             predator.moveWithInertia(world.width, world.height);
           }
         });
-        return newPredators;
+        return newPredatorsList;
       });
       
       animationRef.current = requestAnimationFrame(updateAnimation);
@@ -448,11 +524,14 @@ function App() {
             color: '#fff',
             fontSize: '13px',
             maxHeight: '600px',
-            overflowY: 'auto'
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px'
           }}>
-            <h3 style={{ margin: '0 0 10px 0', textAlign: 'center' }}>⚙️ Управление</h3>
-            
-            <div style={{ marginBottom: '15px' }}>
+            {/* Управление (кнопки) */}
+            <div>
+              <h3 style={{ margin: '0 0 10px 0', textAlign: 'center' }}>⚙️ Управление</h3>
               <button 
                 onClick={handleStart}
                 style={{ width: '100%', padding: '8px', marginBottom: '8px', cursor: 'pointer', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px' }}
@@ -479,85 +558,113 @@ function App() {
               </button>
             </div>
             
-            <hr style={{ margin: '10px 0' }} />
-            
-            <div style={{ fontWeight: 'bold', marginBottom: '8px', textAlign: 'center' }}>🐆 Настройки</div>
-            
-            {/* Количество зебр */}
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                <span>🦓 Зебры:</span>
-                <input 
-                  type="number" 
-                  min="0" 
-                  max="50" 
-                  step="1"
-                  value={zebraCount}
-                  onChange={(e) => setZebraCount(Math.min(50, Math.max(0, parseInt(e.target.value) || 0)))}
-                  style={{ width: '60px', textAlign: 'center' }}
-                />
-              </label>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
-                <span style={{ fontSize: '11px' }}>Скорость:</span>
-                <input 
-                  type="number" 
-                  min="0.5" 
-                  max="2.0" 
-                  step="0.1"
-                  value={zebraSpeed}
-                  onChange={(e) => setZebraSpeed(parseFloat(e.target.value))}
-                  style={{ width: '60px', textAlign: 'center' }}
-                />
-              </div>
-            </div>
-            
-            {/* Количество львов */}
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                <span>🦁 Львы:</span>
-                <input 
-                  type="number" 
-                  min="0" 
-                  max="30" 
-                  step="1"
-                  value={lionCount}
-                  onChange={(e) => setLionCount(Math.min(30, Math.max(0, parseInt(e.target.value) || 0)))}
-                  style={{ width: '60px', textAlign: 'center' }}
-                />
-              </label>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
-                <span style={{ fontSize: '11px' }}>Скорость:</span>
-                <input 
-                  type="number" 
-                  min="0.5" 
-                  max="2.0" 
-                  step="0.1"
-                  value={lionSpeed}
-                  onChange={(e) => setLionSpeed(parseFloat(e.target.value))}
-                  style={{ width: '60px', textAlign: 'center' }}
-                />
-              </div>
-              {lionSpeed <= zebraSpeed && (
-                <div style={{ color: 'red', fontSize: '10px', marginTop: '4px' }}>
-                  ⚠️ Львы должны быть быстрее зебр!
+            {/* Настройки */}
+            <div>
+              <div style={{ fontWeight: 'bold', marginBottom: '8px', textAlign: 'center' }}>🐆 Настройки</div>
+              
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span>🦓 Зебры:</span>
+                  <input 
+                    type="number" 
+                    min="0" 
+                    max="50" 
+                    step="1"
+                    value={zebraCount}
+                    onChange={(e) => setZebraCount(Math.min(50, Math.max(0, parseInt(e.target.value) || 0)))}
+                    style={{ width: '60px', textAlign: 'center' }}
+                  />
+                </label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                  <span style={{ fontSize: '11px' }}>Скорость:</span>
+                  <input 
+                    type="number" 
+                    min="0.5" 
+                    max="2.0" 
+                    step="0.1"
+                    value={zebraSpeed}
+                    onChange={(e) => setZebraSpeed(parseFloat(e.target.value))}
+                    style={{ width: '60px', textAlign: 'center' }}
+                  />
                 </div>
-              )}
+              </div>
+              
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span>🦁 Львы:</span>
+                  <input 
+                    type="number" 
+                    min="0" 
+                    max="30" 
+                    step="1"
+                    value={lionCount}
+                    onChange={(e) => setLionCount(Math.min(30, Math.max(0, parseInt(e.target.value) || 0)))}
+                    style={{ width: '60px', textAlign: 'center' }}
+                  />
+                </label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                  <span style={{ fontSize: '11px' }}>Скорость:</span>
+                  <input 
+                    type="number" 
+                    min="0.5" 
+                    max="2.0" 
+                    step="0.1"
+                    value={lionSpeed}
+                    onChange={(e) => setLionSpeed(parseFloat(e.target.value))}
+                    style={{ width: '60px', textAlign: 'center' }}
+                  />
+                </div>
+                {lionSpeed <= zebraSpeed && (
+                  <div style={{ color: 'red', fontSize: '10px', marginTop: '4px' }}>
+                    ⚠️ Львы должны быть быстрее зебр!
+                  </div>
+                )}
+              </div>
+              
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span>🌿 Трава:</span>
+                  <input 
+                    type="number" 
+                    min="0" 
+                    max="80" 
+                    step="1"
+                    value={grassCount}
+                    onChange={(e) => setGrassCount(Math.min(80, Math.max(0, parseInt(e.target.value) || 0)))}
+                    style={{ width: '60px', textAlign: 'center' }}
+                  />
+                </label>
+              </div>
             </div>
             
-            {/* Количество травы */}
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                <span>🌿 Трава:</span>
-                <input 
-                  type="number" 
-                  min="0" 
-                  max="80" 
-                  step="1"
-                  value={grassCount}
-                  onChange={(e) => setGrassCount(Math.min(80, Math.max(0, parseInt(e.target.value) || 0)))}
-                  style={{ width: '60px', textAlign: 'center' }}
+            {/* Графики с горизонтальным скроллом */}
+            <div>
+              <div style={{ fontWeight: 'bold', marginBottom: '8px', textAlign: 'center' }}>📈 Динамика популяций</div>
+              <div 
+                ref={chartContainerRef}
+                style={{ 
+                  overflowX: 'auto', 
+                  width: '216px', 
+                  border: '1px solid #444', 
+                  borderRadius: '4px',
+                  backgroundColor: '#1a1a1a'
+                }}
+              >
+                <canvas 
+                  ref={chartCanvasRef}
+                  width={216}
+                  height={120}
+                  style={{ 
+                    display: 'block',
+                    backgroundColor: '#1a1a1a'
+                  }}
                 />
-              </label>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', marginTop: '5px', fontSize: '10px' }}>
+                <span style={{ color: '#ffffff' }}>🦓 Зебры</span>
+                <span style={{ color: '#ffd700' }}>🦁 Львы</span>
+                <span style={{ color: '#4caf50' }}>🌿 Трава</span>
+              </div>
             </div>
           </div>
         </div>
