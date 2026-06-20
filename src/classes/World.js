@@ -1,4 +1,5 @@
 import Grass from './Grass';
+
 class World {
     constructor(width, height) {
         this.width = width;
@@ -7,14 +8,11 @@ class World {
         this.herbivores = [];
         this.predators = [];
         
-        // Параметры регенерации травы
-        this.maxGrassCount = 40;           // максимальное количество кустов
-        this.regenerationDelay = 300;       // кадров до появления новой травы (5 сек при 60 fps)
         this.regenerationTimer = 0;
-    }
-
-    addGrass(grass) {
-        this.grassPatches.push(grass);
+        this.minGrassDistance = 40;
+        this.regenerationDelay = 300;
+        this.zebraMatingCooldown = 480;
+        this.lionMatingCooldown = 840;
     }
 
     addHerbivore(herbivore) {
@@ -27,8 +25,65 @@ class World {
         this.predators.push(predator);
     }
 
-    // Проверка, можно ли разместить траву в этой позиции
-    isPositionFreeForGrass(x, y, minDistance = 25) {
+    isOverlapping(newGrass, existingGrass, minDistance = 35) {
+        for (const grass of existingGrass) {
+            const dx = grass.x - newGrass.x;
+            const dy = grass.y - newGrass.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance < grass.radius + newGrass.radius + minDistance) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    createNonOverlappingGrass(count) {
+        const grassPatches = [];
+        const maxAttempts = 200;
+        const minDistance = 35;
+        
+        for (let i = 0; i < count; i++) {
+            let attempts = 0;
+            let placed = false;
+            
+            while (!placed && attempts < maxAttempts) {
+                const potentialGrass = new Grass(
+                    Math.random() * this.width,
+                    Math.random() * this.height,
+                    10 + Math.random() * 10
+                );
+                
+                let isFree = true;
+                for (const grass of grassPatches) {
+                    const dx = grass.x - potentialGrass.x;
+                    const dy = grass.y - potentialGrass.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < grass.radius + potentialGrass.radius + minDistance) {
+                        isFree = false;
+                        break;
+                    }
+                }
+                
+                if (isFree) {
+                    grassPatches.push(potentialGrass);
+                    placed = true;
+                }
+                attempts++;
+            }
+            
+            if (!placed) {
+                grassPatches.push(new Grass(
+                    Math.random() * this.width,
+                    Math.random() * this.height,
+                    10 + Math.random() * 10
+                ));
+            }
+        }
+        
+        return grassPatches;
+    }
+
+    isPositionFreeForGrass(x, y, minDistance = 40) {
         for (const grass of this.grassPatches) {
             if (grass.isDepleted()) continue;
             const dx = grass.x - x;
@@ -41,74 +96,155 @@ class World {
         return true;
     }
 
-    // Создание новой травы в случайной свободной позиции
     spawnNewGrass() {
-        const maxAttempts = 100;
+        const step = 30;
+        const minDistance = 40;
+        let hasFreeSpace = false;
+        
+        for (let x = 0; x < this.width; x += step) {
+            for (let y = 0; y < this.height; y += step) {
+                if (this.isPositionFreeForGrass(x, y, minDistance)) {
+                    hasFreeSpace = true;
+                    break;
+                }
+            }
+            if (hasFreeSpace) break;
+        }
+        
+        if (!hasFreeSpace) {
+            return false;
+        }
+        
+        const maxAttempts = 150;
         
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
             const x = Math.random() * this.width;
             const y = Math.random() * this.height;
             
-            if (this.isPositionFreeForGrass(x, y, 30)) {
+            if (this.isPositionFreeForGrass(x, y, minDistance)) {
                 const newGrass = new Grass(x, y, 10 + Math.random() * 10);
                 this.grassPatches.push(newGrass);
-                console.log(`🌱 Новая трава выросла на (${x.toFixed(0)}, ${y.toFixed(0)})`);
                 return true;
             }
         }
-        console.log("🌱 Не удалось найти место для новой травы");
+        
         return false;
     }
 
+    calculateGenders(count) {
+        const males = Math.ceil(count / 2);
+        const females = Math.floor(count / 2);
+        return { males, females };
+    }
+
+    getCounts() {
+        return {
+            zebras: this.herbivores.filter(h => h.isAlive).length,
+            lions: this.predators.filter(p => p.isAlive).length,
+            grass: this.grassPatches.filter(g => !g.isDepleted()).length
+        };
+    }
+
+    initializeWithParams(
+        zebraCount, zebraSpeed, lionCount, lionSpeed, grassCount,
+        zebraMatingCooldown, lionMatingCooldown, regenerationFrames,
+        HerbivoreClass, PredatorClass
+    ) {
+        this.grassPatches = [];
+        this.herbivores = [];
+        this.predators = [];
+        this.zebraMatingCooldown = zebraMatingCooldown;
+        this.lionMatingCooldown = lionMatingCooldown;
+        this.regenerationDelay = regenerationFrames;
+        this.regenerationTimer = 0;
+        
+        const newGrass = this.createNonOverlappingGrass(grassCount);
+        this.grassPatches = newGrass;
+
+        const newHerbivores = [];
+        const { males: zebraMales, females: zebraFemales } = this.calculateGenders(zebraCount);
+        
+        for (let i = 0; i < zebraMales; i++) {
+            newHerbivores.push(new HerbivoreClass(
+                Math.random() * this.width,
+                Math.random() * this.height,
+                { species: 'zebra', color: '#ffffff', radius: 12, maxSpeed: zebraSpeed, gender: 'male', matingCooldown: zebraMatingCooldown }
+            ));
+        }
+        for (let i = 0; i < zebraFemales; i++) {
+            newHerbivores.push(new HerbivoreClass(
+                Math.random() * this.width,
+                Math.random() * this.height,
+                { species: 'zebra', color: '#ffffff', radius: 12, maxSpeed: zebraSpeed, gender: 'female', matingCooldown: zebraMatingCooldown }
+            ));
+        }
+        
+        this.herbivores = newHerbivores;
+
+        const newPredators = [];
+        const { males: lionMales, females: lionFemales } = this.calculateGenders(lionCount);
+        
+        for (let i = 0; i < lionMales; i++) {
+            newPredators.push(new PredatorClass(
+                Math.random() * this.width,
+                Math.random() * this.height,
+                { species: 'lion', color: '#ffd700', radius: 12, maxSpeed: lionSpeed, gender: 'male', matingCooldown: lionMatingCooldown }
+            ));
+        }
+        for (let i = 0; i < lionFemales; i++) {
+            newPredators.push(new PredatorClass(
+                Math.random() * this.width,
+                Math.random() * this.height,
+                { species: 'lion', color: '#ffd700', radius: 12, maxSpeed: lionSpeed, gender: 'female', matingCooldown: lionMatingCooldown }
+            ));
+        }
+        this.predators = newPredators;
+        
+        return {
+            grassPatches: this.grassPatches,
+            herbivores: this.herbivores,
+            predators: this.predators
+        };
+    }
+
     update() {
-        // Травоядные едят траву
         for (const herbivore of this.herbivores) {
             if (herbivore.isAlive) {
                 herbivore.tryToEat(this);
             }
         }
         
-        // Хищники охотятся
         for (const predator of this.predators) {
             if (predator.isAlive) {
                 predator.tryToHunt(this);
             }
         }
         
-        // Спаривание травоядных
         for (const herbivore of this.herbivores) {
             if (herbivore.isAlive) {
                 herbivore.tryToMate(this);
             }
         }
         
-        // Спаривание хищников
         for (const predator of this.predators) {
             if (predator.isAlive) {
                 predator.tryToMate(this);
             }
         }
         
-        // Удаление мёртвых
         this.grassPatches = this.grassPatches.filter(grass => !grass.isDepleted());
         this.herbivores = this.herbivores.filter(herbivore => herbivore.isAlive);
         this.predators = this.predators.filter(predator => predator.isAlive);
         
-        // РЕГЕНЕРАЦИЯ ТРАВЫ
-        const currentGrassCount = this.grassPatches.length;
-        
-        // Если травы меньше 50% от максимума - запускаем таймер регенерации
-        if (currentGrassCount < this.maxGrassCount * 0.5) {
-            if (this.regenerationTimer <= 0) {
-                // Трава восстанавливается
-                this.spawnNewGrass();
+        if (this.regenerationTimer <= 0) {
+            const hasSpace = this.spawnNewGrass();
+            if (hasSpace) {
                 this.regenerationTimer = this.regenerationDelay;
             } else {
-                this.regenerationTimer--;
+                this.regenerationTimer = this.regenerationDelay / 2;
             }
         } else {
-            // Если травы достаточно - сбрасываем таймер
-            this.regenerationTimer = 0;
+            this.regenerationTimer--;
         }
     }
 
