@@ -25,22 +25,10 @@ class World {
         this.predators.push(predator);
     }
 
-    isOverlapping(newGrass, existingGrass, minDistance = 35) {
-        for (const grass of existingGrass) {
-            const dx = grass.x - newGrass.x;
-            const dy = grass.y - newGrass.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            if (distance < grass.radius + newGrass.radius + minDistance) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    createNonOverlappingGrass(count) {
+    createGrass(count) {
         const grassPatches = [];
-        const maxAttempts = 200;
-        const minDistance = 35;
+        const maxAttempts = count === 1 ? 300 : 500;
+        const minDistance = 50;
         
         for (let i = 0; i < count; i++) {
             let attempts = 0;
@@ -53,82 +41,35 @@ class World {
                     10 + Math.random() * 10
                 );
                 
+                const existingGrass = count === 1 ? this.grassPatches : grassPatches;
                 let isFree = true;
-                for (const grass of grassPatches) {
-                    const dx = grass.x - potentialGrass.x;
-                    const dy = grass.y - potentialGrass.y;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-                    if (distance < grass.radius + potentialGrass.radius + minDistance) {
+                
+                for (const grass of existingGrass) {
+                    if (potentialGrass.isOverlapping(grass, minDistance)) {
                         isFree = false;
                         break;
                     }
                 }
                 
                 if (isFree) {
-                    grassPatches.push(potentialGrass);
+                    if (count === 1) {
+                        this.grassPatches.push(potentialGrass);
+                    } else {
+                        grassPatches.push(potentialGrass);
+                    }
                     placed = true;
                 }
                 attempts++;
             }
             
             if (!placed) {
-                grassPatches.push(new Grass(
-                    Math.random() * this.width,
-                    Math.random() * this.height,
-                    10 + Math.random() * 10
-                ));
+                if (count === 1) {
+                    return [];
+                }
             }
         }
         
         return grassPatches;
-    }
-
-    isPositionFreeForGrass(x, y, minDistance = 40) {
-        for (const grass of this.grassPatches) {
-            if (grass.isDepleted()) continue;
-            const dx = grass.x - x;
-            const dy = grass.y - y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            if (distance < grass.radius + minDistance) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    spawnNewGrass() {
-        const step = 30;
-        const minDistance = 40;
-        let hasFreeSpace = false;
-        
-        for (let x = 0; x < this.width; x += step) {
-            for (let y = 0; y < this.height; y += step) {
-                if (this.isPositionFreeForGrass(x, y, minDistance)) {
-                    hasFreeSpace = true;
-                    break;
-                }
-            }
-            if (hasFreeSpace) break;
-        }
-        
-        if (!hasFreeSpace) {
-            return false;
-        }
-        
-        const maxAttempts = 150;
-        
-        for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            const x = Math.random() * this.width;
-            const y = Math.random() * this.height;
-            
-            if (this.isPositionFreeForGrass(x, y, minDistance)) {
-                const newGrass = new Grass(x, y, 10 + Math.random() * 10);
-                this.grassPatches.push(newGrass);
-                return true;
-            }
-        }
-        
-        return false;
     }
 
     calculateGenders(count) {
@@ -158,7 +99,7 @@ class World {
         this.regenerationDelay = regenerationFrames;
         this.regenerationTimer = 0;
         
-        const newGrass = this.createNonOverlappingGrass(grassCount);
+        const newGrass = this.createGrass(grassCount);
         this.grassPatches = newGrass;
 
         const newHerbivores = [];
@@ -237,8 +178,8 @@ class World {
         this.predators = this.predators.filter(predator => predator.isAlive);
         
         if (this.regenerationTimer <= 0) {
-            const hasSpace = this.spawnNewGrass();
-            if (hasSpace) {
+            const newGrass = this.createGrass(1);
+            if (newGrass.length > 0) {
                 this.regenerationTimer = this.regenerationDelay;
             } else {
                 this.regenerationTimer = this.regenerationDelay / 2;

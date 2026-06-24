@@ -14,7 +14,7 @@ class Animal {
         this.stamina = 60 + Math.random() * 30;
         
         this.gender = gender || (Math.random() < 0.5 ? "male" : "female");
-        this.matingCooldown = 0;
+        this.matingCooldown = matingCooldown;
         this.defaultMatingCooldown = matingCooldown;
         this.childCooldown = isChild ? 600 : 0;
         this.isChild = isChild;
@@ -30,15 +30,9 @@ class Animal {
     }
 
     getCurrentSpeed() {
-        let speedFactor = this.stamina / 100;
+        let speedFactor = (this.stamina / 100) * (1 - (this.hunger / 100) * 0.3);
         
-        if (this.type === "predator") {
-            speedFactor *= (1 + (100 - this.hunger) / 150);
-        } else {
-            speedFactor *= (this.hunger > 50 ? (120 - this.hunger) / 70 : 1);
-        }
-        
-        let speed = this.maxSpeed * Math.max(0.3, Math.min(1.2, speedFactor));
+        let speed = this.maxSpeed * Math.max(0.3, speedFactor);
         return Math.max(this.minSpeed, speed);
     }
 
@@ -145,18 +139,22 @@ class Animal {
         this.x += this.dx;
         this.y += this.dy;
         
+        // левый край
         if (this.x < this.radius) {
             this.x = this.radius;
             this.dx = Math.abs(this.dx);
         }
+        // правый край
         if (this.x > width - this.radius) {
             this.x = width - this.radius;
             this.dx = -Math.abs(this.dx);
         }
+        // верхний край
         if (this.y < this.radius) {
             this.y = this.radius;
             this.dy = Math.abs(this.dy);
         }
+        // нижний край
         if (this.y > height - this.radius) {
             this.y = height - this.radius;
             this.dy = -Math.abs(this.dy);
@@ -169,7 +167,7 @@ class Animal {
         this.updateState();
     }
 
-    eat(amount = 30) {
+    eat(amount) {
         this.hunger = Math.max(0, this.hunger - amount);
         this.stamina = Math.min(100, this.stamina + amount / 2);
     }

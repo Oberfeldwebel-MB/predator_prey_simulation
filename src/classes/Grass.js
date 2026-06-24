@@ -16,6 +16,13 @@ class Grass {
         return this.isEaten;
     }
 
+    isOverlapping(otherGrass, minDistance = 50) {
+        const dx = this.x - otherGrass.x;
+        const dy = this.y - otherGrass.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        return distance < this.radius + otherGrass.radius + minDistance;
+    }
+
     draw(ctx) {
         if (this.isDepleted()) return;
         

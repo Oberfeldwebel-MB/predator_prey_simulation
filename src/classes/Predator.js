@@ -13,11 +13,11 @@ class Predator extends Animal {
         };
         
         const settings = { ...defaults, ...options };
-        super(x, y, settings.color, settings.radius, "predator", settings.maxSpeed, settings.gender, settings.isChild, settings.matingCooldown);
+        super(x, y, settings['color'], settings['radius'], "predator", settings['maxSpeed'], settings['gender'], settings['isChild'], settings['matingCooldown']);
         
-        this.species = settings.species;
-        this.huntingRange = settings.huntingRange;
-        this.chaseRange = settings.chaseRange;
+        this.species = settings['species'];
+        this.huntingRange = settings['huntingRange'];
+        this.chaseRange = settings['chaseRange'];
         this.currentTarget = null;
     }
 
@@ -38,10 +38,6 @@ class Predator extends Animal {
             }
         }
         return nearest;
-    }
-
-    findFood(world) {
-        return this.getNearestHerbivore(world.herbivores, 280);
     }
 
     chasePrey(prey) {
@@ -79,7 +75,7 @@ class Predator extends Animal {
         }
         
         if (!this.currentTarget) {
-            this.currentTarget = this.findFood(world);
+            this.currentTarget = this.getNearestHerbivore(world.herbivores, 280);
         }
         
         if (!this.currentTarget) return false;
@@ -101,7 +97,7 @@ class Predator extends Animal {
         
         if (distance <= this.radius + this.currentTarget.radius + 10) {
             this.currentTarget.isAlive = false;
-            this.eat(50);
+            this.eat(100);
             this.currentTarget = null;
             return true;
         }
@@ -160,10 +156,8 @@ class Predator extends Animal {
         const maxSpeed = (this.maxSpeed + partner.maxSpeed) / 2 + (Math.random() - 0.5) * 0.3;
         
         const mother = this.gender === "female" ? this : partner;
-        const offsetX = (Math.random() - 0.5) * 80;
-        const offsetY = (Math.random() - 0.5) * 80;
-        const x = Math.max(12, Math.min(mother.x + offsetX, mother.world?.width || 800));
-        const y = Math.max(12, Math.min(mother.y + offsetY, mother.world?.height || 600));
+        const x = Math.max(12, Math.min(mother.x + 5, mother.world?.width || 800));
+        const y = Math.max(12, Math.min(mother.y + 5, mother.world?.height || 600));
         
         return new Predator(x, y, {
             species: this.species,

@@ -12,10 +12,10 @@ class Herbivore extends Animal {
         };
         
         const settings = { ...defaults, ...options };
-        super(x, y, settings.color, settings.radius, "herbivore", settings.maxSpeed, settings.gender, settings.isChild, settings.matingCooldown);
+        super(x, y, settings['color'], settings['radius'], "herbivore", settings['maxSpeed'], settings['gender'], settings['isChild'], settings['matingCooldown']);
         
-        this.species = settings.species;
-        this.searchRange = settings.searchRange;
+        this.species = settings['species'];
+        this.searchRange = settings['searchRange'];
         this.currentTargetGrass = null;
         this.isPanicking = false;
     }
@@ -64,7 +64,7 @@ class Herbivore extends Animal {
         return true;
     }
 
-    getNearestGrass(world, maxDistance = 240) {
+    findFood(world, maxDistance = 240) {
         let nearest = null;
         let minDistance = Infinity;
         
@@ -81,10 +81,6 @@ class Herbivore extends Animal {
             }
         }
         return nearest;
-    }
-
-    findFood(world) {
-        return this.getNearestGrass(world, 240);
     }
 
     seekGrass(grass) {
@@ -158,6 +154,7 @@ class Herbivore extends Animal {
         }
         
         if (!this.currentTargetGrass) return false;
+
         if (this.currentTargetGrass.isDepleted()) {
             this.currentTargetGrass = null;
             return false;
@@ -216,13 +213,11 @@ class Herbivore extends Animal {
 
     createOffspring(partner) {
         const gender = Math.random() < 0.5 ? "male" : "female";
-        const maxSpeed = (this.maxSpeed + partner.maxSpeed) / 2 + (Math.random() - 0.5) * 0.3;
+        const maxSpeed = this.maxSpeed;
         
         const mother = this.gender === "female" ? this : partner;
-        const offsetX = (Math.random() - 0.5) * 80;
-        const offsetY = (Math.random() - 0.5) * 80;
-        const x = Math.max(12, Math.min(mother.x + offsetX, mother.world?.width || 800));
-        const y = Math.max(12, Math.min(mother.y + offsetY, mother.world?.height || 600));
+        const x = Math.max(12, Math.min(mother.x + 5, mother.world?.width || 800));
+        const y = Math.max(12, Math.min(mother.y + 5, mother.world?.height || 600));
         
         return new Herbivore(x, y, {
             species: this.species,
