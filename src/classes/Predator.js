@@ -40,30 +40,6 @@ class Predator extends Animal {
         return nearest;
     }
 
-    chasePrey(prey) {
-        if (!prey || !prey.isAlive) {
-            this.currentTarget = null;
-            return false;
-        }
-        
-        const dx = prey.x - this.x;
-        const dy = prey.y - this.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        if (distance > this.chaseRange) {
-            this.currentTarget = null;
-            return false;
-        }
-        
-        if (distance > 0.1) {
-            const currentSpeed = this.getCurrentSpeed();
-            this.dx = (dx / distance) * currentSpeed;
-            this.dy = (dy / distance) * currentSpeed;
-        }
-        
-        return true;
-    }
-
     tryToHunt(world) {
         if (this.hunger < 70) {
             this.currentTarget = null;
@@ -84,16 +60,20 @@ class Predator extends Animal {
             return false;
         }
         
-        this.chasePrey(this.currentTarget);
+        const dx = this.currentTarget.x - this.x;
+        const dy = this.currentTarget.y - this.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance > 0.1) {
+                const currentSpeed = this.getCurrentSpeed();
+                this.dx = (dx / distance) * currentSpeed;  
+                this.dy = (dy / distance) * currentSpeed;
+            }
         
         if (!this.currentTarget || !this.currentTarget.isAlive) {
             this.currentTarget = null;
             return false;
         }
-        
-        const dx = this.currentTarget.x - this.x;
-        const dy = this.currentTarget.y - this.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
         
         if (distance <= this.radius + this.currentTarget.radius + 10) {
             this.currentTarget.isAlive = false;
@@ -129,8 +109,21 @@ class Predator extends Animal {
     }
 
     tryToMate(world) {
+        if (this.isPanicking) {
+            this.mateTarget = null;
+            return false;
+        }
+        // если цель уже была
         if (this.mateTarget && this.mateTarget.isAlive && this.mateTarget.isReadyToMate()) {
-            this.seekMate(this.mateTarget);
+            //направление на партнёра
+            let dx = this.mateTarget.x - this.x;
+            let dy = this.mateTarget.y - this.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance > 0.1) {
+                const currentSpeed = this.getCurrentSpeed();
+                this.dx = (dx / distance) * currentSpeed;  
+                this.dy = (dy / distance) * currentSpeed;
+            }
             
             if (this.canMate(this.mateTarget)) {
                 return this.mateWith(this.mateTarget, world);
@@ -142,10 +135,18 @@ class Predator extends Animal {
         
         if (!this.isReadyToMate()) return false;
         
+        // поиск партнера и установлка цели для размножения
         const partner = this.findMate(world);
         if (partner) {
             this.mateTarget = partner;
-            this.seekMate(partner);
+            let dx = partner.x - this.x;
+            let dy = partner.y - this.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance > 0.1) {
+                const currentSpeed = this.getCurrentSpeed();
+                this.dx = (dx / distance) * currentSpeed;  
+                this.dy = (dy / distance) * currentSpeed;
+            }
         }
         
         return false;

@@ -83,31 +83,6 @@ class Herbivore extends Animal {
         return nearest;
     }
 
-    seekGrass(grass) {
-        if (!grass || grass.isDepleted()) {
-            this.currentTargetGrass = null;
-            this.isPanicking = false;
-            return false;
-        }
-        
-        const dx = grass.x - this.x;
-        const dy = grass.y - this.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        if (distance > this.searchRange) {
-            this.currentTargetGrass = null;
-            return false;
-        }
-        
-        if (distance > 0.1) {
-            const currentSpeed = this.getCurrentSpeed();
-            this.dx = (dx / distance) * currentSpeed;
-            this.dy = (dy / distance) * currentSpeed;
-        }
-        
-        return true;
-    }
-
     findMate(world) {
         let nearestMate = null;
         let minDistance = Infinity;
@@ -132,19 +107,28 @@ class Herbivore extends Animal {
     }
 
     tryToEat(world) {
+        // 1. проверка на хищника
         const nearestPredator = this.getNearestPredator(world, 150);
         if (nearestPredator && nearestPredator.isAlive) {
-            const fled = this.runFromPredator(nearestPredator);
-            if (fled) return false;
+            const dx = this.x - nearestPredator.x;
+            const dy = this.y - nearestPredator.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance < 60) {
+                this.runFromPredator(nearestPredator);
+                return false;
+            }
         }
         
         this.isPanicking = false;
         
+        // 2. Проверка голода
         if (this.hunger < 50) {
             this.currentTargetGrass = null;
             return false;
         }
         
+        // 3. поиск травы
         if (this.currentTargetGrass && this.currentTargetGrass.isDepleted()) {
             this.currentTargetGrass = null;
         }
@@ -154,22 +138,22 @@ class Herbivore extends Animal {
         }
         
         if (!this.currentTargetGrass) return false;
-
         if (this.currentTargetGrass.isDepleted()) {
             this.currentTargetGrass = null;
             return false;
         }
         
-        this.seekGrass(this.currentTargetGrass);
-        
-        if (!this.currentTargetGrass || this.currentTargetGrass.isDepleted()) {
-            this.currentTargetGrass = null;
-            return false;
-        }
+        // 4. движение к траве 
         
         const dx = this.currentTargetGrass.x - this.x;
         const dy = this.currentTargetGrass.y - this.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance > 0.1) {
+                const currentSpeed = this.getCurrentSpeed();
+                this.dx = (dx / distance) * currentSpeed;  
+                this.dy = (dy / distance) * currentSpeed;
+            }
         
         if (distance < this.radius + this.currentTargetGrass.radius + 10) {
             const eaten = this.currentTargetGrass.eat();
@@ -190,7 +174,15 @@ class Herbivore extends Animal {
         }
         
         if (this.mateTarget && this.mateTarget.isAlive && this.mateTarget.isReadyToMate()) {
-            this.seekMate(this.mateTarget);
+            //направление на партнёра
+            let dx = this.mateTarget.x - this.x;
+            let dy = this.mateTarget.y - this.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance > 0.1) {
+                const currentSpeed = this.getCurrentSpeed();
+                this.dx = (dx / distance) * currentSpeed;  
+                this.dy = (dy / distance) * currentSpeed;
+            }
             
             if (this.canMate(this.mateTarget)) {
                 return this.mateWith(this.mateTarget, world);
@@ -205,7 +197,6 @@ class Herbivore extends Animal {
         const partner = this.findMate(world);
         if (partner) {
             this.mateTarget = partner;
-            this.seekMate(partner);
         }
         
         return false;

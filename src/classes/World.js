@@ -187,6 +187,18 @@ class World {
         } else {
             this.regenerationTimer--;
         }
+
+        for (const herbivore of this.herbivores) {
+            if (herbivore.isAlive) {
+                herbivore.moveWithInertia(this.width, this.height);
+            }
+        }
+        
+        for (const predator of this.predators) {
+            if (predator.isAlive) {
+                predator.moveWithInertia(this.width, this.height);
+            }
+        }
     }
 
     clear() {

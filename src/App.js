@@ -7,14 +7,16 @@ import Grass from './classes/Grass';
 import PopulationChart from './classes/PopulationChart';
 
 function App() {
-  const canvasRef = useRef(null);
-  const chartCanvasRef = useRef(null);
-  const chartContainerRef = useRef(null);
-  const chartRef = useRef(null);
-  const animationRef = useRef(null);
+  // ссылки 
+  const canvasRef = useRef(null);         // ссылка на html элемент canvas для поля
+  const chartCanvasRef = useRef(null);    // ссылка на html элемент canvas для графика (визуал)
+  const chartContainerRef = useRef(null); // ссылка на контейнер под график
+  const chartRef = useRef(null);          // ссылка на объект класса PopulationChart - график (логика)
+  const animationRef = useRef(null);      
   const worldRef = useRef(null);
   
-  const [herbivores, setHerbivores] = useState([]);
+  // состояния 
+  const [herbivores, setHerbivores] = useState([]);        
   const [predators, setPredators] = useState([]);
   const [grassPatches, setGrassPatches] = useState([]);
   const [selectedAnimal, setSelectedAnimal] = useState(null);
@@ -32,33 +34,39 @@ function App() {
   const [isPaused, setIsPaused] = useState(false);
   
   const [populationHistory, setPopulationHistory] = useState({
+    // списки с количеством животных по кадрам
     zebras: [],
     lions: [],
     grass: []
-  });
-  const [recordCounter, setRecordCounter] = useState(0);
+  });  // история популяций для графика 
+
+  const [recordCounter, setRecordCounter] = useState(0);  // счетчик кадров для записи данных
   const RECORD_INTERVAL = 30;
 
   // Инициализация мира
   useEffect(() => {
     const world = new World(800, 600);
-    worldRef.current = world;
+    worldRef.current = world; // сохранаем ссылку на объект мира
     
+    // перевод кулдаунов размножения в кадры
     const zebraMatingCooldown = zebraMatingCooldownSeconds * 60;
     const lionMatingCooldown = lionMatingCooldownSeconds * 60;
     const regenerationFrames = grassRegenerationSeconds * 60;
     
+    // заполнение мира животными и травой
     const initialState = world.initializeWithParams(
       zebraCount, zebraSpeed, lionCount, lionSpeed, grassCount,
       zebraMatingCooldown, lionMatingCooldown, regenerationFrames,
       Herbivore, Predator
     );
     
+    // обновление состояний списков животных и травы
     setGrassPatches(initialState.grassPatches);
     setHerbivores(initialState.herbivores);
     setPredators(initialState.predators);
     
     if (chartCanvasRef.current && chartContainerRef.current && !chartRef.current) {
+      // создание объекта графика и сохранение ссылки на него
       chartRef.current = new PopulationChart(
         chartCanvasRef.current, 
         chartContainerRef, 
@@ -67,12 +75,6 @@ function App() {
       );
     }
   }, []);
-
-  // Синхронизация состояния с миром
-  const syncFromWorld = () => {
-    if (!worldRef.current) return;
-    setGrassPatches([...worldRef.current.grassPatches]);
-  };
 
   // Запись данных для графиков
   const recordPopulationData = () => {
@@ -85,7 +87,7 @@ function App() {
     }));
   };
 
-  // Анимация
+  // прорисовка изменений на поле
   useEffect(() => {
     if (!worldRef.current) return;
     
@@ -97,27 +99,15 @@ function App() {
       
       if (!worldRef.current) return;
       
+      // Обновляем мир (логика + движение)
       worldRef.current.update();
       
-      const newHerbivores = [...worldRef.current.herbivores];
-      const newPredators = [...worldRef.current.predators];
-      
-      newHerbivores.forEach(herbivore => {
-        if (herbivore.isAlive) {
-          herbivore.moveWithInertia(worldRef.current.width, worldRef.current.height);
-        }
-      });
-      
-      newPredators.forEach(predator => {
-        if (predator.isAlive) {
-          predator.moveWithInertia(worldRef.current.width, worldRef.current.height);
-        }
-      });
-      
-      setHerbivores(newHerbivores);
-      setPredators(newPredators);
+      // Синхронизируем состояние
       setGrassPatches([...worldRef.current.grassPatches]);
+      setHerbivores([...worldRef.current.herbivores]);
+      setPredators([...worldRef.current.predators]);
       
+      // Запись данных для графиков
       setRecordCounter(prev => {
         if (prev >= RECORD_INTERVAL) {
           recordPopulationData();
@@ -149,18 +139,19 @@ function App() {
     }
   }, [populationHistory]);
 
-  // Отрисовка canvas
+  // Отрисовка поля, травы и животных
   useEffect(() => {
     if (!canvasRef.current || !worldRef.current) return;
-    const ctx = canvasRef.current.getContext('2d');
+    const ctx = canvasRef.current.getContext('2d');   // 
     const world = worldRef.current;
     
     ctx.fillStyle = '#8B5A2B';
     ctx.fillRect(0, 0, world.width, world.height);
 
-    grassPatches.forEach(grass => grass.draw(ctx));
+    grassPatches.forEach(grass => grass.draw(ctx));  // отрисовка каждого объекта травы
     
-    const allAnimals = [...herbivores, ...predators];
+    const allAnimals = [...herbivores, ...predators];  
+    // отрисовка всех животных (если оно выбрано, то подсвечивается (ctx.shadowBlur ))
     allAnimals.forEach(animal => {
       if (selectedAnimal === animal) {
         ctx.save();
@@ -179,18 +170,22 @@ function App() {
     });
   }, [herbivores, predators, grassPatches, selectedAnimal]);
 
-  const handleCanvasClick = (e) => {
+  // обработчик клика по полю
+  const handleCanvasClick = (e) => {   // e - объект с информацией о событии (координаты мыши, тип события, элемент где произошло) передается автоматически
+    
     const canvas = canvasRef.current;
     if (!canvas || !worldRef.current) return;
     
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
     
-    const mouseX = Math.min(canvas.width, Math.max(0, (e.clientX - rect.left) * scaleX));
-    const mouseY = Math.min(canvas.height, Math.max(0, (e.clientY - rect.top) * scaleY));
+    const rect = canvas.getBoundingClientRect(); // rect = координаты canvas элемента
     
+    // координаты мыши внутри поля
+    const mouseX = Math.min(canvas.width, Math.max(0, (e.clientX - rect.left)));
+    const mouseY = Math.min(canvas.height, Math.max(0, (e.clientY - rect.top)));
+    
+
     const allAnimals = [...worldRef.current.herbivores, ...worldRef.current.predators];
+    // нахождение животного на которое крикнул пользователь
     const clickedAnimal = allAnimals.find(animal => {
       if (!animal.isAlive) return false;
       const dx = animal.x - mouseX;
@@ -198,19 +193,18 @@ function App() {
       return Math.sqrt(dx * dx + dy * dy) <= animal.radius + 5;
     });
     
-    setSelectedAnimal(clickedAnimal || null);
+    setSelectedAnimal(clickedAnimal || null); // изменение состояния selectedAnimal
   };
 
+  // ф-ия изменения состояния курсосра при наведении на животное
   const handleMouseMove = (e) => {
     const canvas = canvasRef.current;
     if (!canvas || !worldRef.current) return;
     
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
+    const rect = canvas.getBoundingClientRect(); // rect = координаты canvas элемента
     
-    const mouseX = Math.min(canvas.width, Math.max(0, (e.clientX - rect.left) * scaleX));
-    const mouseY = Math.min(canvas.height, Math.max(0, (e.clientY - rect.top) * scaleY));
+    const mouseX = Math.min(canvas.width, Math.max(0, (e.clientX - rect.left)));
+    const mouseY = Math.min(canvas.height, Math.max(0, (e.clientY - rect.top)));
     
     const allAnimals = [...worldRef.current.herbivores, ...worldRef.current.predators];
     const isOverAnimal = allAnimals.some(animal => {
@@ -220,9 +214,10 @@ function App() {
       return Math.sqrt(dx * dx + dy * dy) <= animal.radius + 5;
     });
     
-    setCursorStyle(isOverAnimal ? 'pointer' : 'default');
+    setCursorStyle(isOverAnimal ? 'pointer' : 'default');  // установка стиля курсора
   };
 
+  // обработка кнопки сброса (создание мира заново)
   const handleReset = () => {
     if (!worldRef.current) return;
     setIsRunning(false);
@@ -249,6 +244,7 @@ function App() {
     setIsRunning(true);
   };
 
+  // ф-ия для сравнения задаваемых скоростей льва и зебры 
   const handleApplySettings = () => {
     if (lionSpeed <= zebraSpeed) {
       alert("Львы должны быть быстрее зебр!");
@@ -257,7 +253,8 @@ function App() {
     handleReset();
   };
 
-  const aliveHerbivores = herbivores.filter(h => h.isAlive).length;
+  // списки живых животных и травы
+  const aliveHerbivores = herbivores.filter(h => h.isAlive).length;   
   const alivePredators = predators.filter(p => p.isAlive).length;
   const aliveGrass = grassPatches.filter(g => !g.isDepleted()).length;
   const allAnimals = [...herbivores, ...predators].filter(a => a.isAlive);
@@ -266,7 +263,7 @@ function App() {
     <div className="App">
       <header className="App-header">
         <h1>Ecosystem Simulation</h1>
-        <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start', justifyContent: 'center' /* основной контейнер*/}}> 
           
           {/* ЛЕВАЯ КОЛОНКА — Статистика и список животных */}
           <div style={{
@@ -278,9 +275,11 @@ function App() {
             color: '#fff',
             fontSize: '13px',
             maxHeight: '600px',
-            overflowY: 'auto'
-          }}>
-            <div style={{ marginBottom: '12px' }}>
+            overflowY: 'auto'    // вертикальный скролл
+          /*стили левой колонки */}}>   
+
+            
+            <div style={{ marginBottom: '12px' }/*блок со статистикой */}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
                 <span>🦁 Львы:</span>
                 <span style={{ fontWeight: 'bold' }}>{alivePredators}</span>
@@ -295,7 +294,7 @@ function App() {
               </div>
             </div>
             
-            <hr style={{ margin: '10px 0' }} />
+            <hr style={{ margin: '10px 0' }/* линия разделения*/} />
             
             <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>📋 Список животных:</div>
             <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
@@ -352,8 +351,8 @@ function App() {
           
           {/* ЦЕНТРАЛЬНАЯ КОЛОНКА — Canvas поле и график внизу */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <canvas 
-              ref={canvasRef}
+            <canvas //блок поля
+              ref={canvasRef}   // присваивание ссылки
               width={800}
               height={600}
               onClick={handleCanvasClick}
@@ -368,7 +367,7 @@ function App() {
             {/* График динамики популяций (под полем) */}
             <div style={{ marginTop: '15px', width: '800px' }}>
               <div style={{ fontWeight: 'bold', marginBottom: '8px', textAlign: 'center', color: '#fff' }}>📈 Динамика популяций</div>
-              <div 
+              <div // блок видимой части графика
                 ref={chartContainerRef} 
                 style={{ 
                   overflowX: 'auto', 
@@ -380,7 +379,7 @@ function App() {
                   backgroundColor: '#1a1a1a' 
                 }}
               >
-                <canvas 
+                <canvas  // блок графика canvas
                   ref={chartCanvasRef} 
                   style={{ 
                     display: 'block', 
@@ -429,7 +428,7 @@ function App() {
                 </label>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
                   <span style={{ fontSize: '11px' }}>Скорость:</span>
-                  <input type="number" min="0.5" max="2.0" step="0.1" value={zebraSpeed} onChange={(e) => setZebraSpeed(parseFloat(e.target.value))} style={{ width: '60px', textAlign: 'center' }} />
+                  <input type="number" min="0.5" max="3.0" step="0.1" value={zebraSpeed} onChange={(e) => setZebraSpeed(parseFloat(e.target.value))} style={{ width: '60px', textAlign: 'center' }} />
                 </div>
               </div>
               
@@ -440,7 +439,7 @@ function App() {
                 </label>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
                   <span style={{ fontSize: '11px' }}>Скорость:</span>
-                  <input type="number" min="0.5" max="2.0" step="0.1" value={lionSpeed} onChange={(e) => setLionSpeed(parseFloat(e.target.value))} style={{ width: '60px', textAlign: 'center' }} />
+                  <input type="number" min="0.5" max="3.0" step="0.1" value={lionSpeed} onChange={(e) => setLionSpeed(parseFloat(e.target.value))} style={{ width: '60px', textAlign: 'center' }} />
                 </div>
                 {lionSpeed <= zebraSpeed && <div style={{ color: 'red', fontSize: '10px', marginTop: '4px' }}>⚠️ Львы должны быть быстрее зебр!</div>}
               </div>

@@ -92,25 +92,6 @@ class Animal {
                this.hunger <= 50;
     }
 
-    seekMate(partner) {
-        if (!partner || !partner.isAlive || partner.isChild || partner.matingCooldown > 0) {
-            this.mateTarget = null;
-            return false;
-        }
-        
-        const dx = partner.x - this.x;
-        const dy = partner.y - this.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        if (distance > 0.1) {
-            const currentSpeed = this.getCurrentSpeed();
-            this.dx = (dx / distance) * currentSpeed;
-            this.dy = (dy / distance) * currentSpeed;
-        }
-        
-        return true;
-    }
-
     startMateEffect() {
         this.mateEffectTimer = 20;
     }
@@ -217,37 +198,44 @@ class Animal {
     }
 
     draw(ctx) {
-        if (this.mateEffectTimer > 0) {
-            const intensity = Math.sin(Date.now() * 0.03) * 0.5 + 0.5;
-            ctx.fillStyle = `rgba(255, 215, 0, ${intensity})`;
-        } else {
-            ctx.fillStyle = this.color;
-        }
-        
+    // Эффект спаривания (жёлтое мигание)
+    if (this.mateEffectTimer > 0) {
+        const intensity = Math.sin(Date.now() * 0.03) * 0.5 + 0.5;
+        ctx.fillStyle = `rgba(255, 215, 0, ${intensity})`;
+    } else {
+        ctx.fillStyle = this.color;
+    }
+    
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Зелёная обводка, если животное ГОТОВО к размножению
+
+    if (this.isReadyToMate()) {
+        ctx.strokeStyle = '#00ff00';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius + 3, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+    // Жёлтая обводка при эффекте спаривания
+    else if (this.mateEffectTimer > 0) {
+        ctx.strokeStyle = '#ffd700';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius + 3, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+    // Обычная обводка
+    else {
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.fill();
-        
-        if (this.mateTarget && this.mateTarget.isAlive && this.mateEffectTimer === 0) {
-            ctx.strokeStyle = '#00ff00';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.radius + 3, 0, Math.PI * 2);
-            ctx.stroke();
-        } else if (this.mateEffectTimer > 0) {
-            ctx.strokeStyle = '#ffd700';
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.radius + 3, 0, Math.PI * 2);
-            ctx.stroke();
-        } else {
-            ctx.strokeStyle = '#333';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-            ctx.stroke();
-        }
+        ctx.stroke();
     }
+}
 }
 
 export default Animal;
